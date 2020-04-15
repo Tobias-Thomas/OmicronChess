@@ -2,9 +2,12 @@ import chess.pgn as pgn
 import numpy as np
 from omicron.util.representation import to_bitboard
 import random
+import scipy.sparse
 
 
-def parse_pgn_to_bitboard(pgn_path, out_path):
+def parse_pgn_to_bitboard(pgn_path, out_white, out_black, out_name=None):
+    if not out_name:
+        out_name = pgn_path.split('/')[-1].split('.')[0]
     with open(pgn_path) as pgn_file:
         game_number = -1
         while True:
@@ -22,7 +25,16 @@ def parse_pgn_to_bitboard(pgn_path, out_path):
                 bitboard = to_bitboard(pos.board())
                 positions.append(bitboard)
             positions = random.sample(positions, 10)
-            np.save(out_path+str(game_number), positions)
+            sparse = scipy.sparse.csc_matrix(positions)
+            if winner == 'white':
+                scipy.sparse.save_npz(out_white+out_name+'-'+str(game_number), sparse)
+            if winner == 'black':
+                scipy.sparse.save_npz(out_black+out_name+'-'+str(game_number), sparse)
+
+
+def load_matrix(path):
+    sparse = scipy.sparse.load_npz(path)
+    return sparse.toarray()
 
 
 def _extract_result(headers):
