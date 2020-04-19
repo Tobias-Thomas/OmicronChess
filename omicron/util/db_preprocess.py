@@ -3,9 +3,44 @@ import numpy as np
 from omicron.util.representation import to_bitboard
 import random
 import scipy.sparse
+import os
+import re
+
+
+def parse_pgn_match(pgn_dir_path, match, out_white, out_black, out_name=None):
+    """ Parses all pgn files that match the given regular expression
+
+    Args:
+        pgn_dir_path (str): The path to the directory containing the pgn files
+        match (str): Regular expression to filter out the files to preproces
+        out_white (str): Path to the directory where white win positions
+            will get exported to
+        out_black (str): Path to the directory where black win positions
+            will get exported to
+        out_name(str->str, optional): function to map from file name to out name
+    """
+    f = os.listdir()
+    regex = re.rompile(match)
+    f = [g for g in f if regex.match(s)]
+    for g in f:
+        if callable(out_name):
+            name = out_name(g)
+        parse_pgn_to_bitboard(pgn_dir_path+g, out_white, out_black, name)
 
 
 def parse_pgn_to_bitboard(pgn_path, out_white, out_black, out_name=None):
+    """ Parses a single pgn file to bitboard files. This function saves 10
+    random positions from the game to bitboards and saves them as sparsed
+    matrizes in scipy format. The save name is $out_name-game_number in the file
+
+    Args:
+        pgn_path (str): The Path to the pgn to be converted
+        out_white (str): Path to the directory where white win positions
+            will get exported to
+        out_black (str): Path to the directory where black win positions
+            will get exported to
+        out_name (str, optional): The name as which the games will be saved
+    """
     if not out_name:
         out_name = pgn_path.split('/')[-1].split('.')[0]
     with open(pgn_path) as pgn_file:
@@ -33,11 +68,27 @@ def parse_pgn_to_bitboard(pgn_path, out_white, out_black, out_name=None):
 
 
 def load_matrix(path):
+    """ Loads the positions from one game and returns them as numpy array
+
+    Args:
+        path (str): Path to the game to be loaded
+
+    Returns:
+        numpy.ndarray: The 10 random positions from the game as numpy array
+    """
     sparse = scipy.sparse.load_npz(path)
     return sparse.toarray()
 
 
 def _extract_result(headers):
+    """ Extracts the results from the game and returns the winner as string
+
+    Args:
+        headers (chess.pgn.Headers): Headers from the game in pychess format
+
+    Returns:
+        str: A string representing the winner (either white, blac or draw)
+    """
     res = headers.get('Result')
     assert res in ['1-0', '0-1', '1/2-1/2'], 'only legal results are allowed'
     if res == '1-0':
