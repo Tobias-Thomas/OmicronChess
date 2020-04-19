@@ -1,3 +1,4 @@
+import chess
 import chess.pgn as pgn
 import numpy as np
 from omicron.util.representation import to_bitboard
@@ -19,13 +20,15 @@ def parse_pgn_match(pgn_dir_path, match, out_white, out_black, out_name=None):
             will get exported to
         out_name(str->str, optional): function to map from file name to out name
     """
-    f = os.listdir()
-    regex = re.rompile(match)
-    f = [g for g in f if regex.match(s)]
+    f = os.listdir(pgn_dir_path)
+    regex = re.compile(match)
+    f = [g for g in f if regex.match(g)]
     for g in f:
         if callable(out_name):
-            name = out_name(g)
-        parse_pgn_to_bitboard(pgn_dir_path+g, out_white, out_black, name)
+            save_name = out_name(g)
+        else:
+            save_name = out_name
+        parse_pgn_to_bitboard(pgn_dir_path+g, out_white, out_black, save_name)
 
 
 def parse_pgn_to_bitboard(pgn_path, out_white, out_black, out_name=None):
@@ -54,11 +57,17 @@ def parse_pgn_to_bitboard(pgn_path, out_white, out_black, out_name=None):
             if winner == 'draw':
                 continue
             positions = []
+            prev_board = chess.Board()
             for hm_number,pos in enumerate(game.mainline()):
                 if hm_number <= 19:
+                    prev_board = pos.board()
+                    continue
+                if prev_board.is_capture(pos.move):
+                    prev_board = pos.board()
                     continue
                 bitboard = to_bitboard(pos.board())
                 positions.append(bitboard)
+                prev_board = pos.board()
             positions = random.sample(positions, 10)
             sparse = scipy.sparse.csc_matrix(positions)
             if winner == 'white':
