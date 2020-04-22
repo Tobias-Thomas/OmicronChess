@@ -8,6 +8,9 @@ import numpy as np
 import os
 import random
 import math
+gpus = tf.config.experimental.list_physical_devices('GPU')
+for gpu in gpus:
+  tf.config.experimental.set_memory_growth(gpu, True)
 
 
 def _init_deepchess_model(enc_layers=[773,600,400,200,100], comp_layers=[400,200,100,2]):
@@ -33,10 +36,19 @@ def _init_deepchess_model(enc_layers=[773,600,400,200,100], comp_layers=[400,200
     return model
 
 
+def _load_enc_weights(model, path_to_weights, num_enc_layers=4):
+    weights = np.load(path_to_weights)
+    weights = [weights['arr_%d'%i] for i in range(len(weights.files))]
+    for i in range(num_enc_layers):
+        model.get_layer('encode%d'%i).set_weights(weights[2*i: (2*i)+2])
+    return model
+
+
 def train_deepchess_model(parsed_path_white, parsed_path_black, batch_size, epochs=100,
+                          path_to_enc_weights='pretrained_models/pos2vec/current.npz',
                           enc_layers=[773, 600, 400, 200, 100], comp_layers=[400, 200, 100, 2]):
-    model = _init_deepchess_model(enc_layers, comp_layers)
-    # TODO load pretrained pos2vec model
+    model = _init_deepchess_model(enc_layers, comp_layers, path_to_enc_weights)
+    model = _load_enc_weights(model, path_to_enc_weights, len(enc_layers)-1)
 
     seq = DeepchessSequence(parsed_path_white, parsed_path_black,
                             batch_size=batch_size, epoch_size=batch_size*100)
