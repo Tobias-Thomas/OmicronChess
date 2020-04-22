@@ -68,7 +68,7 @@ def parse_pgn_to_bitboard(pgn_path, out_white, out_black, out_name=None):
                 bitboard = to_bitboard(pos.board())
                 positions.append(bitboard)
                 prev_board = pos.board()
-            positions = random.sample(positions, 10)
+            positions = random.sample(positions, min(10,len(positions)))
             sparse = scipy.sparse.csc_matrix(positions)
             if winner == 'white':
                 scipy.sparse.save_npz(out_white+out_name+'-'+str(game_number), sparse)
