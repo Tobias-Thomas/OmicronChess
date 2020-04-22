@@ -95,6 +95,5 @@ def save_encoder(model, save_name, save_dir, enc_layers=4):
         enc_layers (int, optional): The number of layers that got used for encoding. The input
             layer does not count. Needed to extract the encoding part of the model.
     """
-    encoded = model.get_layer('encode%d'%(enc_layers-1)).output
-    enc_model = Model(inputs=model.input, outputs=encoded)
-    enc_model.save_weights(save_dir+save_name)
+    enc_weights = [x.numpy() for x in model.trainable_variables[:enc_layers*2]]
+    np.savez(save_dir+save_name, *enc_weights)
