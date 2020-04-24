@@ -8,6 +8,7 @@ import numpy as np
 import os
 import random
 import math
+import string
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpus:
   tf.config.experimental.set_memory_growth(gpu, True)
@@ -44,46 +45,78 @@ def _load_enc_weights(model, path_to_weights, num_enc_layers=4):
     return model
 
 
-def train_deepchess_model(parsed_path_white, parsed_path_black, batch_size, epochs=100,
+def train_deepchess_model(input_dir, batch_size, epochs=1000,
                           path_to_enc_weights='pretrained_models/pos2vec/current.npz',
                           enc_layers=[773, 600, 400, 200, 100], comp_layers=[400, 200, 100, 2]):
-    model = _init_deepchess_model(enc_layers, comp_layers, path_to_enc_weights)
+    model = _init_deepchess_model(enc_layers, comp_layers)
     model = _load_enc_weights(model, path_to_enc_weights, len(enc_layers)-1)
 
-    seq = DeepchessSequence(parsed_path_white, parsed_path_black,
-                            batch_size=batch_size, epoch_size=batch_size*100)
+    seq = DeepchessSequence(input_dir, batch_size=batch_size, epoch_size=int(1e6))
     with tf.device('/GPU:0'):
-        model.fit(seq, epochs=epochs, verbose=1)
+        history = model.fit(seq, epochs=epochs, verbose=1,
+                            callbacks=[OnEpochEnd([seq.on_epoch_end])])
     return model, history
 
 
-class  DeepchessSequence(Sequence):
-    def __init__(self, parsed_white, parsed_black, epoch_size, batch_size):
-        self.epoch_size = epoch_size
+def create_deepchess_input(parsed_path_white, parsed_path_black, epoch_size, save_dir):
+    def create_one_input(path_white_game, path_black_game):
+        white_game = load_matrix(path_white_game)
+        white_pos = white_game[random.randint(0, min(9, len(white_game)-1))]
+        black_game = load_matrix(path_black_game)
+        black_pos = black_game[random.randint(0, min(9, len(black_game)-1))]
+
+        white_win_index = np.random.choice([0, 1])
+        if white_win_index == 0:
+            return white_pos, black_pos, white_win_index
+        else:
+            return black_pos, white_pos, white_win_index
+
+    white_games = random.choices(os.listdir(parsed_path_white), k=epoch_size)
+    black_games = random.choices(os.listdir(parsed_path_black), k=epoch_size)
+    input_a = np.zeros((epoch_size,773), dtype=np.bool)
+    input_b = np.zeros((epoch_size,773), dtype=np.bool)
+    labels = np.zeros((epoch_size,2), dtype=np.bool)
+
+    for i, (w,b) in enumerate(zip(white_games, black_games)):
+        inp1, inp2, label_index = create_one_input(parsed_path_white+w, parsed_path_black+b)
+        input_a[i] = inp1
+        input_b[i] = inp2
+        labels[i,label_index] = 1
+
+    save_name = ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase +
+                                      string.digits) for _ in range(10))
+    np.savez_compressed(save_dir+save_name, input_a, input_b, labels)
+
+
+class DeepchessSequence(Sequence):
+    def __init__(self, input_dir, batch_size, epoch_size):
+        self.input_dir = input_dir
         self.batch_size = batch_size
-        self.parsed_white = parsed_white
-        self.parsed_black = parsed_black
+        self.epoch_size = epoch_size
+        self.input_a, self.input_b, self.labels = self.read_input()
 
     def __len__(self):
         return math.ceil(self.epoch_size / self.batch_size)
 
     def __getitem__(self, idx):
-        white_games = os.listdir(self.parsed_white)
-        black_games = os.listdir(self.parsed_black)
-        batch_inp0 = np.zeros((self.batch_size,773))
-        batch_inp1 = np.zeros((self.batch_size,773))
-        labels = np.zeros((self.batch_size,2))
-        for i in range(self.batch_size):
-            random_white_game = load_matrix(self.parsed_white+random.choice(white_games))
-            random_white_pos = random_white_game[random.randint(0,9)]
-            random_black_game = load_matrix(self.parsed_black+random.choice(black_games))
-            random_black_pos = random_black_game[random.randint(0,9)]
+        batch_input_a = self.input_a[idx*self.batch_size: (idx+1)*self.batch_size]
+        batch_input_b = self.input_b[idx*self.batch_size: (idx+1)*self.batch_size]
+        batch_labels = self.labels[idx*self.batch_size: (idx+1)*self.batch_size]
+        return [batch_input_a, batch_input_b], batch_labels
 
-            white_pos_index = random.choice([0,1])
-            labels[i,white_pos_index] = 1
-            labels[i,1-white_pos_index] = 0
+    def on_epoch_end(self):
+        self.input_a, self.input_b, self.labels = self.read_input()
 
-            batch_inp0[i] = random_black_pos if white_pos_index else random_white_pos
-            batch_inp1[i] = random_white_pos if white_pos_index else random_black_pos
+    def read_input(self):
+        inputs = os.listdir(self.input_dir)
+        input = np.load(self.input_dir+random.choice(inputs))
+        return input['arr_0'], input['arr_1'], input['arr_2']
 
-        return [batch_inp0, batch_inp1], labels
+
+class OnEpochEnd(tf.keras.callbacks.Callback):
+  def __init__(self, callbacks):
+    self.callbacks = callbacks
+
+  def on_epoch_end(self, epoch, logs=None):
+    for callback in self.callbacks:
+      callback()
