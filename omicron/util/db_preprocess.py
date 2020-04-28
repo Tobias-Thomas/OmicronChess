@@ -1,15 +1,25 @@
-import chess
-import chess.pgn as pgn
-import numpy as np
-from omicron.util.representation import to_bitboard
-import random
-import scipy.sparse
+"""The db_preprocess module provides funtionality to prepare pgn data for training stages.
+
+Currently the module only provides conversions for pgn data to bitboard files. Those get saved
+as sparse scipy arrays.
+
+Typical Usage example:
+    # for a directory with many pgn files the command to process a subset of them:
+    parse_pgn_match('path/to/pgn', 'regex', 'path/for/white', 'path/for/black')
+    # For the process of one single pgn file:
+    parse_pgn('path/to/file.pgn', 'path/for/white', 'path/for/black')
+"""
 import os
 import re
+import random
+import chess
+import chess.pgn as pgn
+import scipy.sparse
+from omicron.util.representation import to_bitboard
 
 
 def parse_pgn_match(pgn_dir_path, match, out_white, out_black, out_name=None):
-    """ Parses all pgn files that match the given regular expression
+    """Parse all pgn files that match the given regular expression.
 
     Args:
         pgn_dir_path (str): The path to the directory containing the pgn files
@@ -20,21 +30,23 @@ def parse_pgn_match(pgn_dir_path, match, out_white, out_black, out_name=None):
             will get exported to
         out_name(str->str, optional): function to map from file name to out name
     """
-    f = os.listdir(pgn_dir_path)
+    files = os.listdir(pgn_dir_path)
     regex = re.compile(match)
-    f = [g for g in f if regex.match(g)]
-    for g in f:
+    files = [g for g in files if regex.match(g)]
+    for game in files:
         if callable(out_name):
-            save_name = out_name(g)
+            save_name = out_name(game)
         else:
             save_name = out_name
-        parse_pgn_to_bitboard(pgn_dir_path+g, out_white, out_black, save_name)
+        parse_pgn_to_bitboard(pgn_dir_path+game, out_white, out_black, save_name)
 
 
 def parse_pgn_to_bitboard(pgn_path, out_white, out_black, out_name=None):
-    """ Parses a single pgn file to bitboard files. This function saves 10
-    random positions from the game to bitboards and saves them as sparsed
-    matrizes in scipy format. The save name is $out_name-game_number in the file
+    """Parse a single pgn file to bitboard files.
+
+    This function saves 10 random positions from the game to bitboards and
+    saves them as sparse matrizes in scipy format.
+    The save name is $out_name-game_number in the file.
 
     Args:
         pgn_path (str): The Path to the pgn to be converted
@@ -58,7 +70,7 @@ def parse_pgn_to_bitboard(pgn_path, out_white, out_black, out_name=None):
                 continue
             positions = []
             prev_board = chess.Board()
-            for hm_number,pos in enumerate(game.mainline()):
+            for hm_number, pos in enumerate(game.mainline()):
                 if hm_number <= 19:
                     prev_board = pos.board()
                     continue
@@ -68,7 +80,7 @@ def parse_pgn_to_bitboard(pgn_path, out_white, out_black, out_name=None):
                 bitboard = to_bitboard(pos.board())
                 positions.append(bitboard)
                 prev_board = pos.board()
-            positions = random.sample(positions, min(10,len(positions)))
+            positions = random.sample(positions, min(10, len(positions)))
             sparse = scipy.sparse.csc_matrix(positions)
             if winner == 'white':
                 scipy.sparse.save_npz(out_white+out_name+'-'+str(game_number), sparse)
@@ -77,7 +89,7 @@ def parse_pgn_to_bitboard(pgn_path, out_white, out_black, out_name=None):
 
 
 def load_matrix(path):
-    """ Loads the positions from one game and returns them as numpy array
+    """Load the positions from one game and returns them as numpy array.
 
     Args:
         path (str): Path to the game to be loaded
@@ -90,7 +102,7 @@ def load_matrix(path):
 
 
 def _extract_result(headers):
-    """ Extracts the results from the game and returns the winner as string
+    """Extract the results from the game and returns the winner as string.
 
     Args:
         headers (chess.pgn.Headers): Headers from the game in pychess format
