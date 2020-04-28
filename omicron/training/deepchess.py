@@ -121,7 +121,7 @@ def create_deepchess_input(parsed_path_white, parsed_path_black, epoch_size, sav
 
     white_games = random.choices(os.listdir(parsed_path_white), k=epoch_size)
     black_games = random.choices(os.listdir(parsed_path_black), k=epoch_size)
-    input_a = np.zeros((epoch_size, 774), dtype=np.bool)
+    input_a = np.zeros((epoch_size, 773), dtype=np.bool)
     input_b = np.zeros((epoch_size, 773), dtype=np.bool)
     labels = np.zeros((epoch_size, 2), dtype=np.bool)
 
